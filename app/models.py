@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Integer, String, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
 
 from app.database import Base
 
@@ -11,4 +11,17 @@ class Business(Base):
     plan = Column(String, nullable=False, default="free")
     ai_calls_used = Column(Integer, nullable=False, default=0)
     ai_call_limit = Column(Integer, nullable=False, default=50)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False)
+    full_name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True, index=True)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="staff")
+    handles_category = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
