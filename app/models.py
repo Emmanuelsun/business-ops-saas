@@ -25,3 +25,14 @@ class User(Base):
     role = Column(String, nullable=False, default="staff")
     handles_category = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
