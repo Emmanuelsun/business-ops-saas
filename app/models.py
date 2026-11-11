@@ -1,6 +1,7 @@
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -61,3 +62,38 @@ class Enquiry(Base):
     needs_manual_sorting = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False)
+    assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    enquiry_id = Column(Integer, ForeignKey("enquiries.id"), nullable=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    title = Column(String, nullable=False)
+    due_date = Column(Date, nullable=True)
+    status = Column(String, nullable=False, default="open")
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class FollowUp(Base):
+    __tablename__ = "follow_ups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False)
+    enquiry_id = Column(Integer, ForeignKey("enquiries.id"), nullable=False)
+    draft_message = Column(Text, nullable=True)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class KnowledgeItem(Base):
+    __tablename__ = "knowledge_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False)
+    title = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
