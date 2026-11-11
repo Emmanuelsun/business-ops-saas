@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
 Category = Literal["sales", "support", "complaint", "billing", "other"]
 EnquiryStatus = Literal["new", "assigned", "in_progress", "resolved"]
+TaskStatus = Literal["open", "done"]
 
 
 class RegisterRequest(BaseModel):
@@ -85,5 +86,27 @@ class EnquiryResponse(BaseModel):
     needs_manual_sorting: bool
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class TaskCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    due_date: Optional[date] = None
+    assigned_to: Optional[int] = None
+    enquiry_id: Optional[int] = None
+    customer_id: Optional[int] = None
+
+
+class TaskResponse(BaseModel):
+    id: int
+    business_id: int
+    assigned_to: Optional[int] = None
+    enquiry_id: Optional[int] = None
+    customer_id: Optional[int] = None
+    title: str
+    due_date: Optional[date] = None
+    status: str
+    created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
