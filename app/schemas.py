@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
@@ -33,3 +34,20 @@ class UserResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class CustomerCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(default=None, max_length=30)
+
+
+class CustomerResponse(BaseModel):
+    id: int
+    business_id: int
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
