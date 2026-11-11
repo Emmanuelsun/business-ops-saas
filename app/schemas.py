@@ -42,6 +42,12 @@ class CustomerCreate(BaseModel):
     phone: Optional[str] = Field(default=None, max_length=30)
 
 
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(default=None, max_length=30)
+
+
 class CustomerResponse(BaseModel):
     id: int
     business_id: int
