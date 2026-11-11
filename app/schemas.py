@@ -4,6 +4,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, EmailStr, Field
 
 Category = Literal["sales", "support", "complaint", "billing", "other"]
+EnquiryStatus = Literal["new", "assigned", "in_progress", "resolved"]
 
 
 class RegisterRequest(BaseModel):
@@ -55,5 +56,26 @@ class CustomerResponse(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class EnquiryCreate(BaseModel):
+    customer_id: int
+    message: str = Field(min_length=1, max_length=5000)
+
+
+class EnquiryResponse(BaseModel):
+    id: int
+    business_id: int
+    customer_id: int
+    assigned_to: Optional[int] = None
+    message: str
+    category: Optional[str] = None
+    priority: Optional[str] = None
+    status: str
+    needs_manual_sorting: bool
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
