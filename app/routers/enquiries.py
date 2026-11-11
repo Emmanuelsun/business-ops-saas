@@ -4,9 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_owner
 from app.models import Customer, Enquiry, User
-from app.schemas import EnquiryCreate, EnquiryResponse, EnquiryStatus
+from app.schemas import (
+    EnquiryAssign,
+    EnquiryCreate,
+    EnquiryResponse,
+    EnquiryStatus,
+    EnquiryStatusUpdate,
+)
 
 router = APIRouter(prefix="/enquiries", tags=["Enquiries"])
 
@@ -16,6 +22,18 @@ def visible_enquiries(db: Session, user: User):
     if user.role != "owner":
         query = query.filter(Enquiry.assigned_to == user.id)
     return query
+
+
+def find_enquiry(db: Session, user: User, enquiry_id: int) -> Enquiry:
+    enquiry = (
+        visible_enquiries(db, user).filter(Enquiry.id == enquiry_id).first()
+    )
+    if enquiry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Enquiry not found",
+        )
+    return enquiry
 
 
 @router.post(
@@ -78,14 +96,50 @@ def get_enquiry(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    enquiry = (
-        visible_enquiries(db, current_user)
-        .filter(Enquiry.id == enquiry_id)
+    return find_enquiry(db, current_user, enquiry_id)
+
+
+@router.patch("/{enquiry_id}/assign", response_model=EnquiryResponse)
+def assign_enquiry(
+    enquiry_id: int,
+    data: EnquiryAssign,
+    owner: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    enquiry = find_enquiry(db, owner, enquiry_id)
+
+    assignee = (
+        db.query(User)
+        .filter(
+            User.id == data.assigned_to,
+            User.business_id == owner.business_id,
+        )
         .first()
     )
-    if enquiry is None:
+    if assignee is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Enquiry not found",
+            detail="User not found",
         )
+
+    enquiry.assigned_to = assignee.id
+    if enquiry.status == "new":
+        enquiry.status = "assigned"
+
+    db.commit()
+    db.refresh(enquiry)
+    return enquiry
+
+
+@router.patch("/{enquiry_id}/status", response_model=EnquiryResponse)
+def update_enquiry_status(
+    enquiry_id: int,
+    data: EnquiryStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    enquiry = find_enquiry(db, current_user, enquiry_id)
+    enquiry.status = data.status
+    db.commit()
+    db.refresh(enquiry)
     return enquiry

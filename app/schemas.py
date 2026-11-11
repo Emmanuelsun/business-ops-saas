@@ -65,6 +65,14 @@ class EnquiryCreate(BaseModel):
     message: str = Field(min_length=1, max_length=5000)
 
 
+class EnquiryAssign(BaseModel):
+    assigned_to: int
+
+
+class EnquiryStatusUpdate(BaseModel):
+    status: EnquiryStatus
+
+
 class EnquiryResponse(BaseModel):
     id: int
     business_id: int
