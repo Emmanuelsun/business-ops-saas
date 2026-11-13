@@ -125,3 +125,18 @@ class KnowledgeResponse(BaseModel):
     created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+
+
+class SourceNote(BaseModel):
+    id: int
+    title: str
+
+
+class AskResponse(BaseModel):
+    found: bool
+    answer: str
+    sources: list[SourceNote]
