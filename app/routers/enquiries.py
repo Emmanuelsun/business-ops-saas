@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,6 +16,9 @@ from app.schemas import (
     EnquiryStatus,
     EnquiryStatusUpdate,
 )
+from app.usage import reserve_ai_call
+
+logger = logging.getLogger("enquiries")
 
 router = APIRouter(prefix="/enquiries", tags=["Enquiries"])
 
@@ -78,18 +82,24 @@ def create_enquiry(
     db.commit()
     db.refresh(enquiry)
 
-    try:
-        result = classify_enquiry(message)
-        enquiry.category = result["category"]
-        enquiry.priority = result["priority"]
+    if reserve_ai_call(db, current_user.business_id):
+        try:
+            result = classify_enquiry(message)
+            enquiry.category = result["category"]
+            enquiry.priority = result["priority"]
 
-        assignee = pick_assignee(
-            db, current_user.business_id, result["category"]
+            assignee = pick_assignee(
+                db, current_user.business_id, result["category"]
+            )
+            if assignee is not None:
+                enquiry.assigned_to = assignee.id
+                enquiry.status = "assigned"
+        except AIError:
+            enquiry.needs_manual_sorting = True
+    else:
+        logger.warning(
+            "AI limit reached for business %s", current_user.business_id
         )
-        if assignee is not None:
-            enquiry.assigned_to = assignee.id
-            enquiry.status = "assigned"
-    except AIError:
         enquiry.needs_manual_sorting = True
 
     db.commit()
