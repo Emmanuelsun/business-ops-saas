@@ -2,7 +2,15 @@ import logging
 
 from fastapi import FastAPI
 
-from app.routers import auth, customers, enquiries, knowledge, tasks, users
+from app.routers import (
+    auth,
+    customers,
+    enquiries,
+    follow_ups,
+    knowledge,
+    tasks,
+    users,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +25,7 @@ app.include_router(customers.router)
 app.include_router(enquiries.router)
 app.include_router(tasks.router)
 app.include_router(knowledge.router)
+app.include_router(follow_ups.router)
 
 
 @app.get("/")

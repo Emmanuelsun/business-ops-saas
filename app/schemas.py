@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 Category = Literal["sales", "support", "complaint", "billing", "other"]
 EnquiryStatus = Literal["new", "assigned", "in_progress", "resolved"]
 TaskStatus = Literal["open", "done"]
+FollowUpStatus = Literal["pending", "done"]
 
 
 class RegisterRequest(BaseModel):
@@ -140,3 +141,14 @@ class AskResponse(BaseModel):
     found: bool
     answer: str
     sources: list[SourceNote]
+
+
+class FollowUpResponse(BaseModel):
+    id: int
+    business_id: int
+    enquiry_id: int
+    draft_message: Optional[str] = None
+    status: str
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
