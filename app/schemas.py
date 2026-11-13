@@ -110,3 +110,18 @@ class TaskResponse(BaseModel):
     created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class KnowledgeCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=5000)
+
+
+class KnowledgeResponse(BaseModel):
+    id: int
+    business_id: int
+    title: str
+    content: str
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
