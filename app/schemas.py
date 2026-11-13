@@ -152,3 +152,9 @@ class FollowUpResponse(BaseModel):
     created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class FollowUpRunResponse(BaseModel):
+    checked: int
+    created: int
+    drafted: int
