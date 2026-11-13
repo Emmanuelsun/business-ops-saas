@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.ai import AIError, classify_enquiry
 from app.database import get_db
 from app.dependencies import get_current_user, require_owner
 from app.models import Customer, Enquiry, User
@@ -73,6 +74,16 @@ def create_enquiry(
         message=message,
     )
     db.add(enquiry)
+    db.commit()
+    db.refresh(enquiry)
+
+    try:
+        result = classify_enquiry(message)
+        enquiry.category = result["category"]
+        enquiry.priority = result["priority"]
+    except AIError:
+        enquiry.needs_manual_sorting = True
+
     db.commit()
     db.refresh(enquiry)
     return enquiry
