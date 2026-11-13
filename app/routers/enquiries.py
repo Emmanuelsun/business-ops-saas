@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.ai import AIError, classify_enquiry
+from app.assignment import pick_assignee
 from app.database import get_db
 from app.dependencies import get_current_user, require_owner
 from app.models import Customer, Enquiry, User
@@ -81,6 +82,13 @@ def create_enquiry(
         result = classify_enquiry(message)
         enquiry.category = result["category"]
         enquiry.priority = result["priority"]
+
+        assignee = pick_assignee(
+            db, current_user.business_id, result["category"]
+        )
+        if assignee is not None:
+            enquiry.assigned_to = assignee.id
+            enquiry.status = "assigned"
     except AIError:
         enquiry.needs_manual_sorting = True
 
