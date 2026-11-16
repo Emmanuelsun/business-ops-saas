@@ -9,6 +9,7 @@ from app.routers import (
     follow_ups,
     knowledge,
     tasks,
+    usage,
     users,
 )
 
@@ -26,6 +27,7 @@ app.include_router(enquiries.router)
 app.include_router(tasks.router)
 app.include_router(knowledge.router)
 app.include_router(follow_ups.router)
+app.include_router(usage.router)
 
 
 @app.get("/")
