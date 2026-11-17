@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -17,6 +19,12 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
     status_code=status.HTTP_201_CREATED,
 )
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
+    if os.getenv("ALLOW_REGISTRATION", "false").lower() != "true":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration is closed.",
+        )
+
     email = data.email.lower()
 
     existing_user = db.query(User).filter(User.email == email).first()
