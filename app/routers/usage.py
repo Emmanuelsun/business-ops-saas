@@ -1,12 +1,16 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_owner
 from app.models import Business, User
 
 router = APIRouter(prefix="/usage", tags=["Usage"])
+
+PLAN_LIMITS = {"free": 50, "pro": 500}
 
 
 class UsageResponse(BaseModel):
@@ -15,14 +19,49 @@ class UsageResponse(BaseModel):
     ai_call_limit: int
 
 
+class PlanOption(BaseModel):
+    name: str
+    ai_call_limit: int
+
+
+class PlanChange(BaseModel):
+    plan: Literal["free", "pro"]
+
+
+def usage_for(business: Business) -> UsageResponse:
+    return UsageResponse(
+        plan=business.plan,
+        ai_calls_used=business.ai_calls_used,
+        ai_call_limit=business.ai_call_limit,
+    )
+
+
 @router.get("", response_model=UsageResponse)
 def get_usage(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     business = db.get(Business, current_user.business_id)
-    return UsageResponse(
-        plan=business.plan,
-        ai_calls_used=business.ai_calls_used,
-        ai_call_limit=business.ai_call_limit,
-    )
+    return usage_for(business)
+
+
+@router.get("/plans", response_model=list[PlanOption])
+def list_plans(current_user: User = Depends(get_current_user)):
+    return [
+        PlanOption(name=name, ai_call_limit=limit)
+        for name, limit in PLAN_LIMITS.items()
+    ]
+
+
+@router.patch("/plan", response_model=UsageResponse)
+def change_plan(
+    data: PlanChange,
+    owner: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    business = db.get(Business, owner.business_id)
+    business.plan = data.plan
+    business.ai_call_limit = PLAN_LIMITS[data.plan]
+    db.commit()
+    db.refresh(business)
+    return usage_for(business)
