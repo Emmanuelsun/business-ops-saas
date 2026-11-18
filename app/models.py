@@ -21,6 +21,7 @@ class Business(Base):
     plan = Column(String, nullable=False, default="free")
     ai_calls_used = Column(Integer, nullable=False, default=0)
     ai_call_limit = Column(Integer, nullable=False, default=50)
+    is_demo = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime, server_default=func.now())
 
 

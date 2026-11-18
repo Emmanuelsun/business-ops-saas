@@ -24,6 +24,8 @@ if not str(engine.url.database).endswith("_test"):
 
 @pytest.fixture(scope="session", autouse=True)
 def create_tables():
+    # Rebuild the throwaway test database from scratch for every test run.
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
 
