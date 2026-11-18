@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,7 @@ class UsageResponse(BaseModel):
     plan: str
     ai_calls_used: int
     ai_call_limit: int
+    is_demo: bool
 
 
 class PlanOption(BaseModel):
@@ -33,6 +34,7 @@ def usage_for(business: Business) -> UsageResponse:
         plan=business.plan,
         ai_calls_used=business.ai_calls_used,
         ai_call_limit=business.ai_call_limit,
+        is_demo=business.is_demo,
     )
 
 
@@ -60,6 +62,12 @@ def change_plan(
     db: Session = Depends(get_db),
 ):
     business = db.get(Business, owner.business_id)
+    if business.is_demo:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Plans cannot be changed in the demo.",
+        )
+
     business.plan = data.plan
     business.ai_call_limit = PLAN_LIMITS[data.plan]
     db.commit()
