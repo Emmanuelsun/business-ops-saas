@@ -8,7 +8,12 @@ load_dotenv()
 _real_url = make_url(os.environ["DATABASE_URL"])
 _test_url = _real_url.set(database="business_ops_test")
 os.environ["DATABASE_URL"] = _test_url.render_as_string(hide_password=False)
+
+# Fixed settings for the tests, whatever the real .env says.
 os.environ["ALLOW_REGISTRATION"] = "false"
+os.environ["DEMO_ENABLED"] = "false"
+os.environ["DEMO_DAILY_LIMIT"] = "30"
+os.environ["DEMO_AI_CALLS"] = "10"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -78,3 +83,6 @@ def make_business(client, monkeypatch):
         }
 
     return _make
+
+
+# End of file.

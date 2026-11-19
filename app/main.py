@@ -1,6 +1,9 @@
 import logging
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.routers import (
     auth,
@@ -31,7 +34,29 @@ app.include_router(follow_ups.router)
 app.include_router(usage.router)
 app.include_router(demo.router)
 
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
-@app.get("/")
+
+@app.middleware("http")
+async def always_check_for_fresh_web_files(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/app"):
+        # The browser may keep a copy, but must ask if it is still current.
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.get("/", include_in_schema=False)
 def home():
+    return RedirectResponse(url="/app/")
+
+
+@app.get("/health")
+def health():
     return {"message": "Business Ops API is running"}
+
+
+app.mount("/app", StaticFiles(directory=WEB_DIR, html=True), name="web")
+
+
+# End of file.
