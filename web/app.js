@@ -275,6 +275,56 @@
     return row;
   }
 
+  // The plan card is shown to owners only. The server also refuses everyone else,
+  // and refuses demo accounts, so these checks only keep the screen tidy.
+  function planCard() {
+    var usage = state.usage;
+    var card = el("div", "card tool-card");
+    card.appendChild(el("h3", null, "Plan"));
+    card.appendChild(
+      el("p", null, "You are on the " + capitalize(usage.plan) + " plan. Choose the plan that fits your business.")
+    );
+
+    var buttons = el("div", "row-buttons");
+    state.plans.forEach(function (plan) {
+      var isCurrent = plan.name === usage.plan;
+      var button = el(
+        "button",
+        "btn btn-small " + (isCurrent ? "btn-primary" : "btn-ghost"),
+        capitalize(plan.name) + " (" + plan.ai_call_limit + " AI calls)"
+      );
+      button.type = "button";
+      button.setAttribute("aria-pressed", isCurrent ? "true" : "false");
+      button.disabled = usage.is_demo;
+
+      button.addEventListener("click", async function () {
+        if (isCurrent) {
+          return;
+        }
+        buttons.querySelectorAll("button").forEach(function (item) {
+          item.disabled = true;
+        });
+        try {
+          state.usage = await Lumen.patch("/usage/plan", { plan: plan.name });
+          toast("Plan changed to " + capitalize(plan.name));
+        } catch (error) {
+          toast(error.message, true);
+        }
+        render();
+      });
+      buttons.appendChild(button);
+    });
+    card.appendChild(buttons);
+
+    if (usage.is_demo) {
+      card.appendChild(
+        el("p", "stat-note", "Plans cannot be changed in the demo.")
+      );
+    }
+
+    return card;
+  }
+
   function renderDashboard() {
     var usage = state.usage;
     var enquiries = state.enquiries;
@@ -319,6 +369,10 @@
       )
     );
     view.appendChild(stats);
+
+    if (state.me.role === "owner" && state.plans.length) {
+      view.appendChild(planCard());
+    }
 
     var head = el("div", "section-head");
     head.appendChild(el("h2", null, "Recent enquiries"));
@@ -856,7 +910,14 @@
         followUps: results[3],
         notes: results[4],
         users: results[5] || [],
+        plans: [],
       };
+
+      // Only owners can change the plan, so only owners need the plan list.
+      if (me.role === "owner") {
+        state.plans = await Lumen.get("/usage/plans");
+      }
+
       document.getElementById("user-name").textContent = me.full_name;
       document.getElementById("user-role").textContent = capitalize(me.role);
       render();
