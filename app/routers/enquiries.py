@@ -152,6 +152,8 @@ def assign_enquiry(
         )
 
     enquiry.assigned_to = assignee.id
+    # A person has now handled this enquiry, so it no longer needs sorting.
+    enquiry.needs_manual_sorting = False
     if enquiry.status == "new":
         enquiry.status = "assigned"
 
@@ -172,3 +174,6 @@ def update_enquiry_status(
     db.commit()
     db.refresh(enquiry)
     return enquiry
+
+
+# End of file.
