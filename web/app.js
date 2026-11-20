@@ -1,4 +1,4 @@
-// Lumen app: navigation and the Dashboard screen.
+// Lumen app: navigation, Dashboard and Enquiries screens.
 (function () {
   if (!Lumen.getToken()) {
     window.location.href = "/app/";
@@ -36,13 +36,32 @@
   ];
 
   var COMING = {
-    enquiries: "Every enquiry, with its category, priority and owner, will live here.",
     reminders: "Follow-up drafts waiting for your review will live here.",
     knowledge: "Your saved notes, and the question box that answers from them, will live here.",
   };
 
+  var STATUSES = [
+    ["new", "New"],
+    ["assigned", "Assigned"],
+    ["in_progress", "In progress"],
+    ["resolved", "Resolved"],
+  ];
+
+  var FILTERS = [
+    ["all", "All"],
+    ["unsorted", "Needs sorting"],
+    ["new", "New"],
+    ["assigned", "Assigned"],
+    ["in_progress", "In progress"],
+    ["resolved", "Resolved"],
+  ];
+
   var view = document.getElementById("view");
   var state = null;
+  var ui = { filter: "all", search: "" };
+  var repaint = null;
+  var toastTimer = null;
+  var toastBox = null;
 
   // Builds an element. The text is always placed as plain text, never as HTML.
   function el(tag, className, text) {
@@ -72,6 +91,30 @@
       return "yesterday";
     }
     return days + " days ago";
+  }
+
+  function toast(text, isError) {
+    if (!toastBox) {
+      toastBox = el("div", "toast");
+      toastBox.setAttribute("role", "status");
+      toastBox.setAttribute("aria-live", "polite");
+      document.body.appendChild(toastBox);
+    }
+    toastBox.textContent = text;
+    toastBox.className = "toast" + (isError ? " error" : "");
+    toastBox.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toastBox.hidden = true;
+    }, 2600);
+  }
+
+  function customerNames() {
+    var names = {};
+    state.customers.forEach(function (customer) {
+      names[customer.id] = customer.name;
+    });
+    return names;
   }
 
   function buildNav(container) {
@@ -129,7 +172,77 @@
     return card;
   }
 
-  function enquiryRow(enquiry, customerName) {
+  function field(labelText, control) {
+    var label = el("label", "mini-field");
+    label.appendChild(el("span", "mini-label", labelText));
+    label.appendChild(control);
+    return label;
+  }
+
+  // Sends one change to the server, then shows what is really saved.
+  async function save(enquiry, path, body, select) {
+    select.disabled = true;
+    try {
+      var updated = await Lumen.patch(path, body);
+      Object.assign(enquiry, updated);
+      toast("Saved");
+    } catch (error) {
+      toast(error.message, true);
+    }
+    if (repaint) {
+      repaint();
+    }
+  }
+
+  function actionsFor(enquiry) {
+    var box = el("div", "row-actions");
+
+    var statusSelect = el("select", "input select");
+    STATUSES.forEach(function (pair) {
+      var option = el("option", null, pair[1]);
+      option.value = pair[0];
+      statusSelect.appendChild(option);
+    });
+    statusSelect.value = enquiry.status;
+    statusSelect.addEventListener("change", function () {
+      save(
+        enquiry,
+        "/enquiries/" + enquiry.id + "/status",
+        { status: statusSelect.value },
+        statusSelect
+      );
+    });
+    box.appendChild(field("Status", statusSelect));
+
+    if (state.me.role === "owner" && state.users.length) {
+      var assignSelect = el("select", "input select");
+      if (!enquiry.assigned_to) {
+        var none = el("option", null, "Not assigned");
+        none.value = "";
+        none.disabled = true;
+        assignSelect.appendChild(none);
+      }
+      state.users.forEach(function (user) {
+        var option = el("option", null, user.full_name);
+        option.value = String(user.id);
+        assignSelect.appendChild(option);
+      });
+      assignSelect.value = enquiry.assigned_to ? String(enquiry.assigned_to) : "";
+      assignSelect.addEventListener("change", function () {
+        save(
+          enquiry,
+          "/enquiries/" + enquiry.id + "/assign",
+          { assigned_to: Number(assignSelect.value) },
+          assignSelect
+        );
+      });
+      box.appendChild(field("Assigned to", assignSelect));
+    }
+
+    return box;
+  }
+
+  function enquiryRow(enquiry, customerName, detailed) {
     var row = el("article", "card row-card");
 
     var head = el("div", "row-head");
@@ -137,7 +250,7 @@
     head.appendChild(el("span", "row-time", timeAgo(enquiry.created_at)));
     row.appendChild(head);
 
-    row.appendChild(el("p", "row-message", enquiry.message));
+    row.appendChild(el("p", detailed ? "row-message full" : "row-message", enquiry.message));
 
     var badges = el("div", "badges");
     if (enquiry.needs_manual_sorting) {
@@ -155,6 +268,10 @@
     var statusClass = enquiry.status === "resolved" ? "badge-done" : "badge-neutral";
     badges.appendChild(badge(enquiry.status.replace("_", " "), statusClass));
     row.appendChild(badges);
+
+    if (detailed) {
+      row.appendChild(actionsFor(enquiry));
+    }
 
     return row;
   }
@@ -209,11 +326,7 @@
     head.appendChild(seeAll);
     view.appendChild(head);
 
-    var names = {};
-    state.customers.forEach(function (customer) {
-      names[customer.id] = customer.name;
-    });
-
+    var names = customerNames();
     var list = el("div", "list");
     var recent = enquiries
       .slice()
@@ -224,9 +337,90 @@
       list.appendChild(el("div", "card empty", "No enquiries yet."));
     }
     recent.forEach(function (enquiry) {
-      list.appendChild(enquiryRow(enquiry, names[enquiry.customer_id] || "Customer"));
+      list.appendChild(enquiryRow(enquiry, names[enquiry.customer_id] || "Customer", false));
     });
     view.appendChild(list);
+  }
+
+  function matchesFilter(enquiry, key) {
+    if (key === "all") {
+      return true;
+    }
+    if (key === "unsorted") {
+      return enquiry.needs_manual_sorting;
+    }
+    return enquiry.status === key;
+  }
+
+  function renderEnquiries() {
+    view.appendChild(el("h1", "page-title", "Enquiries"));
+    view.appendChild(el("p", "page-sub", "Every customer message, sorted and assigned."));
+
+    var search = el("input", "input search");
+    search.type = "search";
+    search.placeholder = "Search by customer or message";
+    search.value = ui.search;
+    search.setAttribute("aria-label", "Search enquiries");
+    view.appendChild(search);
+
+    var chips = el("div", "chips");
+    view.appendChild(chips);
+    var summary = el("p", "list-summary");
+    view.appendChild(summary);
+    var list = el("div", "list");
+    view.appendChild(list);
+
+    var names = customerNames();
+
+    function paint() {
+      chips.textContent = "";
+      FILTERS.forEach(function (pair) {
+        var total = state.enquiries.filter(function (e) {
+          return matchesFilter(e, pair[0]);
+        }).length;
+
+        var chip = el("button", "chip" + (ui.filter === pair[0] ? " active" : ""));
+        chip.type = "button";
+        chip.setAttribute("aria-pressed", ui.filter === pair[0] ? "true" : "false");
+        chip.appendChild(document.createTextNode(pair[1]));
+        chip.appendChild(el("span", "chip-count", String(total)));
+        chip.addEventListener("click", function () {
+          ui.filter = pair[0];
+          paint();
+        });
+        chips.appendChild(chip);
+      });
+
+      var term = ui.search.trim().toLowerCase();
+      var shown = state.enquiries
+        .filter(function (e) {
+          if (!matchesFilter(e, ui.filter)) {
+            return false;
+          }
+          if (!term) {
+            return true;
+          }
+          var name = (names[e.customer_id] || "").toLowerCase();
+          return name.indexOf(term) !== -1 || e.message.toLowerCase().indexOf(term) !== -1;
+        })
+        .sort(function (a, b) { return b.id - a.id; });
+
+      summary.textContent = "Showing " + shown.length + " of " + state.enquiries.length;
+      list.textContent = "";
+      if (!shown.length) {
+        list.appendChild(el("div", "card empty", "No enquiries match."));
+      }
+      shown.forEach(function (enquiry) {
+        list.appendChild(enquiryRow(enquiry, names[enquiry.customer_id] || "Customer", true));
+      });
+    }
+
+    repaint = paint;
+    search.addEventListener("input", function () {
+      ui.search = search.value;
+      paint();
+    });
+    paint();
   }
 
   function renderComing(id) {
@@ -244,9 +438,12 @@
     if (!state) {
       return;
     }
+    repaint = null;
     view.textContent = "";
     if (id === "dashboard") {
       renderDashboard();
+    } else if (id === "enquiries") {
+      renderEnquiries();
     } else {
       renderComing(id);
     }
@@ -265,22 +462,28 @@
     view.appendChild(el("p", "page-sub", "Loading your workspace..."));
 
     try {
-      var results = await Promise.all([
-        Lumen.get("/auth/me"),
+      var me = await Lumen.get("/auth/me");
+      var requests = [
         Lumen.get("/usage"),
         Lumen.get("/enquiries"),
         Lumen.get("/customers"),
         Lumen.get("/follow-ups?status=pending"),
-      ]);
+      ];
+      if (me.role === "owner") {
+        requests.push(Lumen.get("/users"));
+      }
+      var results = await Promise.all(requests);
+
       state = {
-        me: results[0],
-        usage: results[1],
-        enquiries: results[2],
-        customers: results[3],
-        followUps: results[4],
+        me: me,
+        usage: results[0],
+        enquiries: results[1],
+        customers: results[2],
+        followUps: results[3],
+        users: results[4] || [],
       };
-      document.getElementById("user-name").textContent = state.me.full_name;
-      document.getElementById("user-role").textContent = capitalize(state.me.role);
+      document.getElementById("user-name").textContent = me.full_name;
+      document.getElementById("user-role").textContent = capitalize(me.role);
       render();
     } catch (error) {
       view.textContent = "";
