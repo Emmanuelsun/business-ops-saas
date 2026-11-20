@@ -250,6 +250,48 @@ a.stat-card:hover {
   cursor: wait;
 }
 
+/* Reminders */
+.tool-card {
+  margin-bottom: 20px;
+}
+
+.tool-card h3 {
+  margin-bottom: 6px;
+}
+
+.tool-card .btn {
+  margin-top: 14px;
+}
+
+.draft-label {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.draft {
+  padding: 14px 16px;
+  border-left: 4px solid var(--gold);
+  border-radius: var(--radius-sm);
+  background: var(--green-100);
+  color: var(--green-900);
+  white-space: pre-wrap;
+}
+
+.row-card .notice {
+  margin-top: 0;
+}
+
+.row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 /* Small confirmation message */
 .toast {
   position: fixed;

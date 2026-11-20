@@ -1,4 +1,4 @@
-// Lumen app: navigation, Dashboard and Enquiries screens.
+// Lumen app: navigation, Dashboard, Enquiries and Reminders screens.
 (function () {
   if (!Lumen.getToken()) {
     window.location.href = "/app/";
@@ -36,7 +36,6 @@
   ];
 
   var COMING = {
-    reminders: "Follow-up drafts waiting for your review will live here.",
     knowledge: "Your saved notes, and the question box that answers from them, will live here.",
   };
 
@@ -58,7 +57,7 @@
 
   var view = document.getElementById("view");
   var state = null;
-  var ui = { filter: "all", search: "" };
+  var ui = { filter: "all", search: "", remindFilter: "pending" };
   var repaint = null;
   var toastTimer = null;
   var toastBox = null;
@@ -115,6 +114,10 @@
       names[customer.id] = customer.name;
     });
     return names;
+  }
+
+  function pendingFollowUps() {
+    return state.followUps.filter(function (item) { return item.status === "pending"; });
   }
 
   function buildNav(container) {
@@ -307,7 +310,9 @@
     stats.appendChild(
       statCard("Need sorting", unsorted, unsorted ? "Waiting for a person" : "All sorted", "#enquiries")
     );
-    stats.appendChild(statCard("Reminders", state.followUps.length, "Drafts to review", "#reminders"));
+    stats.appendChild(
+      statCard("Reminders", pendingFollowUps().length, "Drafts to review", "#reminders")
+    );
     stats.appendChild(
       statCard(
         "AI calls used",
@@ -423,6 +428,176 @@
     paint();
   }
 
+  function renderReminders() {
+    view.appendChild(el("h1", "page-title", "Reminders"));
+    view.appendChild(
+      el(
+        "p",
+        "page-sub",
+        "Follow-up drafts to review. Nothing is ever sent to a customer automatically."
+      )
+    );
+
+    if (state.me.role === "owner") {
+      var tool = el("div", "card tool-card");
+      tool.appendChild(el("h3", null, "Check for stale enquiries"));
+      tool.appendChild(
+        el(
+          "p",
+          null,
+          "Finds enquiries with no activity for 2 days and drafts a friendly reminder for each. Uses up to 3 AI calls."
+        )
+      );
+      var runButton = el("button", "btn btn-gold btn-small", "Run the check");
+      runButton.type = "button";
+      runButton.addEventListener("click", async function () {
+        runButton.disabled = true;
+        runButton.textContent = "Checking...";
+        try {
+          var result = await Lumen.post("/follow-ups/run?days=2&limit=3", {});
+          state.followUps = await Lumen.get("/follow-ups");
+          state.usage = await Lumen.get("/usage");
+          ui.remindFilter = "pending";
+          if (result.created) {
+            toast(
+              "Created " + result.created + " reminder(s), " + result.drafted + " drafted by AI"
+            );
+          } else {
+            toast("Nothing needs a reminder right now");
+          }
+        } catch (error) {
+          toast(error.message, true);
+        }
+        runButton.disabled = false;
+        runButton.textContent = "Run the check";
+        paint();
+      });
+      tool.appendChild(runButton);
+      view.appendChild(tool);
+    }
+
+    var chips = el("div", "chips");
+    view.appendChild(chips);
+    var list = el("div", "list");
+    view.appendChild(list);
+
+    var names = customerNames();
+    var byId = {};
+    state.enquiries.forEach(function (enquiry) {
+      byId[enquiry.id] = enquiry;
+    });
+
+    function reminderCard(item) {
+      var enquiry = byId[item.enquiry_id];
+      var card = el("article", "card row-card");
+
+      var head = el("div", "row-head");
+      head.appendChild(
+        el("span", "row-name", enquiry ? names[enquiry.customer_id] || "Customer" : "Customer")
+      );
+      head.appendChild(el("span", "row-time", timeAgo(item.created_at)));
+      card.appendChild(head);
+
+      if (enquiry) {
+        card.appendChild(el("p", "row-message full", enquiry.message));
+      }
+
+      card.appendChild(el("div", "draft-label", "Suggested follow-up. Please check it before sending."));
+      if (item.draft_message) {
+        card.appendChild(el("div", "draft", item.draft_message));
+      } else {
+        card.appendChild(
+          el("p", "notice notice-gold", "No draft was written for this one. Please write it yourself.")
+        );
+      }
+
+      var buttons = el("div", "row-buttons");
+
+      if (item.draft_message) {
+        var copy = el("button", "btn btn-ghost btn-small", "Copy draft");
+        copy.type = "button";
+        copy.addEventListener("click", function () {
+          if (!navigator.clipboard) {
+            toast("Copying is not available here", true);
+            return;
+          }
+          navigator.clipboard.writeText(item.draft_message).then(
+            function () { toast("Draft copied"); },
+            function () { toast("Could not copy the draft", true); }
+          );
+        });
+        buttons.appendChild(copy);
+      }
+
+      if (item.status === "pending") {
+        var done = el("button", "btn btn-primary btn-small", "Mark as done");
+        done.type = "button";
+        done.addEventListener("click", async function () {
+          done.disabled = true;
+          try {
+            var updated = await Lumen.patch("/follow-ups/" + item.id + "/done", {});
+            Object.assign(item, updated);
+            toast("Marked as done");
+          } catch (error) {
+            toast(error.message, true);
+          }
+          paint();
+        });
+        buttons.appendChild(done);
+      } else {
+        buttons.appendChild(badge("done", "badge-done"));
+      }
+
+      card.appendChild(buttons);
+      return card;
+    }
+
+    function paint() {
+      var pending = pendingFollowUps();
+      var finished = state.followUps.filter(function (item) { return item.status === "done"; });
+
+      chips.textContent = "";
+      [
+        ["pending", "Waiting", pending.length],
+        ["done", "Done", finished.length],
+      ].forEach(function (entry) {
+        var chip = el("button", "chip" + (ui.remindFilter === entry[0] ? " active" : ""));
+        chip.type = "button";
+        chip.setAttribute("aria-pressed", ui.remindFilter === entry[0] ? "true" : "false");
+        chip.appendChild(document.createTextNode(entry[1]));
+        chip.appendChild(el("span", "chip-count", String(entry[2])));
+        chip.addEventListener("click", function () {
+          ui.remindFilter = entry[0];
+          paint();
+        });
+        chips.appendChild(chip);
+      });
+
+      var shown = (ui.remindFilter === "done" ? finished : pending)
+        .slice()
+        .sort(function (a, b) { return b.id - a.id; });
+
+      list.textContent = "";
+      if (!shown.length) {
+        list.appendChild(
+          el(
+            "div",
+            "card empty",
+            ui.remindFilter === "done"
+              ? "Nothing has been marked as done yet."
+              : "No reminders waiting. You are all caught up."
+          )
+        );
+      }
+      shown.forEach(function (item) {
+        list.appendChild(reminderCard(item));
+      });
+    }
+
+    repaint = paint;
+    paint();
+  }
+
   function renderComing(id) {
     var item = NAV.filter(function (n) { return n.id === id; })[0];
     view.appendChild(el("h1", "page-title", item.label));
@@ -444,6 +619,8 @@
       renderDashboard();
     } else if (id === "enquiries") {
       renderEnquiries();
+    } else if (id === "reminders") {
+      renderReminders();
     } else {
       renderComing(id);
     }
@@ -467,7 +644,7 @@
         Lumen.get("/usage"),
         Lumen.get("/enquiries"),
         Lumen.get("/customers"),
-        Lumen.get("/follow-ups?status=pending"),
+        Lumen.get("/follow-ups"),
       ];
       if (me.role === "owner") {
         requests.push(Lumen.get("/users"));
