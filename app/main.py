@@ -1,10 +1,12 @@
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.database import Base, engine
 from app.routers import (
     auth,
     customers,
@@ -22,7 +24,15 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
-app = FastAPI(title="Business Ops API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create any missing tables. Tables and data that already exist are untouched.
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(title="Business Ops API", lifespan=lifespan)
 
 app.include_router(auth.router)
 app.include_router(users.router)

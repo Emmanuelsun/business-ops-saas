@@ -1,0 +1,17 @@
+# Never put secrets or local clutter inside the container.
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+.gitignore
+tests/
+conftest.py
+requirements-dev.txt
+*.md
+
+# End of file.
