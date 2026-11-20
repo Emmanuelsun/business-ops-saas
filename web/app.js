@@ -1,4 +1,4 @@
-// Lumen app: navigation, Dashboard, Enquiries and Reminders screens.
+// Lumen app: navigation and the Dashboard, Enquiries, Reminders and Knowledge screens.
 (function () {
   if (!Lumen.getToken()) {
     window.location.href = "/app/";
@@ -34,10 +34,6 @@
       icon: '<path d="M5 4h10a4 4 0 0 1 4 4v12H9a4 4 0 0 1-4-4z"/><path d="M5 16a4 4 0 0 1 4-4h10"/>',
     },
   ];
-
-  var COMING = {
-    knowledge: "Your saved notes, and the question box that answers from them, will live here.",
-  };
 
   var STATUSES = [
     ["new", "New"],
@@ -598,13 +594,213 @@
     paint();
   }
 
-  function renderComing(id) {
-    var item = NAV.filter(function (n) { return n.id === id; })[0];
-    view.appendChild(el("h1", "page-title", item.label));
-    view.appendChild(el("p", "page-sub", "This screen is coming in the next step."));
-    var card = el("div", "card");
-    card.appendChild(el("p", null, COMING[id]));
-    view.appendChild(card);
+  function renderKnowledge() {
+    var isOwner = state.me.role === "owner";
+
+    view.appendChild(el("h1", "page-title", "Knowledge"));
+    view.appendChild(
+      el(
+        "p",
+        "page-sub",
+        "Teach Lumen about your business, then ask questions. Answers come only from your saved notes."
+      )
+    );
+
+    // Ask a question
+    var askCard = el("div", "card tool-card");
+    askCard.appendChild(el("h3", null, "Ask a question"));
+    askCard.appendChild(el("p", null, "Each question uses 1 AI call."));
+
+    var askForm = el("form", "ask-form");
+    askForm.noValidate = true;
+    var questionInput = el("input", "input");
+    questionInput.type = "text";
+    questionInput.maxLength = 1000;
+    questionInput.placeholder = "For example: How long do customers have to ask for a refund?";
+    questionInput.setAttribute("aria-label", "Your question");
+    var askButton = el("button", "btn btn-primary", "Ask");
+    askButton.type = "submit";
+    askForm.appendChild(questionInput);
+    askForm.appendChild(askButton);
+    askCard.appendChild(askForm);
+
+    var answerBox = el("div", "answer");
+    answerBox.setAttribute("aria-live", "polite");
+    answerBox.hidden = true;
+    askCard.appendChild(answerBox);
+    view.appendChild(askCard);
+
+    function showAnswer(kind, text, sources) {
+      answerBox.textContent = "";
+      answerBox.className = "answer answer-" + kind;
+      answerBox.hidden = false;
+      answerBox.appendChild(el("div", "answer-text", text));
+
+      if (sources && sources.length) {
+        var row = el("div", "answer-sources");
+        row.appendChild(el("span", "mini-label", "Source"));
+        sources.forEach(function (source) {
+          row.appendChild(badge(source.title, "badge-category"));
+        });
+        answerBox.appendChild(row);
+      }
+    }
+
+    askForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var question = questionInput.value.trim();
+      if (!question) {
+        toast("Please type a question first", true);
+        return;
+      }
+
+      askButton.disabled = true;
+      askButton.textContent = "Thinking...";
+      try {
+        var result = await Lumen.post("/knowledge/ask", { question: question });
+        state.usage = await Lumen.get("/usage");
+        if (result.found) {
+          showAnswer("found", result.answer, result.sources);
+        } else {
+          showAnswer("none", result.answer);
+        }
+      } catch (error) {
+        showAnswer("error", error.message);
+      }
+      askButton.disabled = false;
+      askButton.textContent = "Ask";
+    });
+
+    // Saved notes
+    var head = el("div", "section-head");
+    var heading = el("h2", null, "Saved notes");
+    head.appendChild(heading);
+    view.appendChild(head);
+
+    var list = el("div", "list");
+    view.appendChild(list);
+
+    function noteCard(note) {
+      var card = el("article", "card row-card");
+
+      var top = el("div", "row-head");
+      top.appendChild(el("span", "row-name", note.title));
+      top.appendChild(el("span", "row-time", timeAgo(note.created_at)));
+      card.appendChild(top);
+
+      card.appendChild(el("div", "note-content", note.content));
+
+      if (isOwner) {
+        var buttons = el("div", "row-buttons");
+        var remove = el("button", "btn btn-ghost btn-small btn-danger", "Delete");
+        remove.type = "button";
+        remove.addEventListener("click", async function () {
+          var sure = window.confirm(
+            'Delete the note "' + note.title + '"? Lumen will no longer use it to answer questions.'
+          );
+          if (!sure) {
+            return;
+          }
+          remove.disabled = true;
+          try {
+            await Lumen.del("/knowledge/" + note.id);
+            state.notes = state.notes.filter(function (item) { return item.id !== note.id; });
+            toast("Note deleted");
+          } catch (error) {
+            toast(error.message, true);
+          }
+          paintNotes();
+        });
+        buttons.appendChild(remove);
+        card.appendChild(buttons);
+      }
+
+      return card;
+    }
+
+    function paintNotes() {
+      heading.textContent = "Saved notes (" + state.notes.length + ")";
+      list.textContent = "";
+      if (!state.notes.length) {
+        list.appendChild(
+          el(
+            "div",
+            "card empty",
+            isOwner ? "No notes yet. Add your first note below." : "No notes have been saved yet."
+          )
+        );
+      }
+      state.notes
+        .slice()
+        .sort(function (a, b) { return b.id - a.id; })
+        .forEach(function (note) {
+          list.appendChild(noteCard(note));
+        });
+    }
+
+    // Add a note (owners only)
+    if (isOwner) {
+      var addCard = el("div", "card form-card");
+      addCard.appendChild(el("h3", null, "Add a note"));
+
+      var noteForm = el("form");
+      noteForm.noValidate = true;
+
+      var titleInput = el("input", "input");
+      titleInput.type = "text";
+      titleInput.maxLength = 200;
+      titleInput.placeholder = "For example: Delivery fees";
+      var titleField = el("div", "field");
+      var titleLabel = el("label", null, "Title");
+      titleInput.id = "note-title";
+      titleLabel.setAttribute("for", "note-title");
+      titleField.appendChild(titleLabel);
+      titleField.appendChild(titleInput);
+      noteForm.appendChild(titleField);
+
+      var contentInput = el("textarea", "input textarea");
+      contentInput.maxLength = 5000;
+      contentInput.placeholder = "Write the facts exactly as a customer should hear them.";
+      var contentField = el("div", "field");
+      var contentLabel = el("label", null, "Content");
+      contentInput.id = "note-content";
+      contentLabel.setAttribute("for", "note-content");
+      contentField.appendChild(contentLabel);
+      contentField.appendChild(contentInput);
+      noteForm.appendChild(contentField);
+
+      var saveButton = el("button", "btn btn-primary", "Save note");
+      saveButton.type = "submit";
+      noteForm.appendChild(saveButton);
+      addCard.appendChild(noteForm);
+      view.appendChild(addCard);
+
+      noteForm.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        var title = titleInput.value.trim();
+        var content = contentInput.value.trim();
+        if (!title || !content) {
+          toast("Please fill in both the title and the content", true);
+          return;
+        }
+
+        saveButton.disabled = true;
+        saveButton.textContent = "Saving...";
+        try {
+          var created = await Lumen.post("/knowledge", { title: title, content: content });
+          state.notes.push(created);
+          noteForm.reset();
+          toast("Note saved");
+          paintNotes();
+        } catch (error) {
+          toast(error.message, true);
+        }
+        saveButton.disabled = false;
+        saveButton.textContent = "Save note";
+      });
+    }
+
+    paintNotes();
   }
 
   function render() {
@@ -622,7 +818,7 @@
     } else if (id === "reminders") {
       renderReminders();
     } else {
-      renderComing(id);
+      renderKnowledge();
     }
     window.scrollTo(0, 0);
   }
@@ -645,6 +841,7 @@
         Lumen.get("/enquiries"),
         Lumen.get("/customers"),
         Lumen.get("/follow-ups"),
+        Lumen.get("/knowledge"),
       ];
       if (me.role === "owner") {
         requests.push(Lumen.get("/users"));
@@ -657,7 +854,8 @@
         enquiries: results[1],
         customers: results[2],
         followUps: results[3],
-        users: results[4] || [],
+        notes: results[4],
+        users: results[5] || [],
       };
       document.getElementById("user-name").textContent = me.full_name;
       document.getElementById("user-role").textContent = capitalize(me.role);

@@ -89,6 +89,7 @@ const Lumen = (() => {
     get: (path) => request(path),
     post: (path, json) => sendJson("POST", path, json),
     patch: (path, json) => sendJson("PATCH", path, json),
+    del: (path) => request(path, { method: "DELETE" }),
   };
 })();
 
