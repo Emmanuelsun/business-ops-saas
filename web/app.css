@@ -288,6 +288,7 @@ a.stat-card:hover {
 .row-buttons {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   margin-top: 4px;
 }
