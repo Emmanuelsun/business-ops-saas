@@ -293,6 +293,72 @@ a.stat-card:hover {
   margin-top: 4px;
 }
 
+/* Plan card (Dashboard, owners only) */
+.plan-card {
+  margin-bottom: 32px;
+}
+
+.plan-card .plan-text {
+  margin-bottom: 14px;
+}
+
+.plan-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  max-width: 440px;
+}
+
+.plan-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  min-height: 64px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.plan-option:hover:not(:disabled):not(.current) {
+  border-color: var(--gold);
+}
+
+.plan-option:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.plan-option.current {
+  background: var(--green-900);
+  border-color: var(--green-900);
+  color: #fff;
+}
+
+.plan-option:disabled {
+  cursor: not-allowed;
+}
+
+.plan-option:disabled:not(.current) {
+  opacity: 0.55;
+}
+
+.plan-name {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.plan-limit {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
 /* Knowledge */
 .ask-form {
   display: grid;

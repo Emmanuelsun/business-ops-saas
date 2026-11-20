@@ -279,29 +279,33 @@
   // and refuses demo accounts, so these checks only keep the screen tidy.
   function planCard() {
     var usage = state.usage;
-    var card = el("div", "card tool-card");
+    var card = el("div", "card tool-card plan-card");
     card.appendChild(el("h3", null, "Plan"));
-    card.appendChild(
-      el("p", null, "You are on the " + capitalize(usage.plan) + " plan. Choose the plan that fits your business.")
-    );
 
-    var buttons = el("div", "row-buttons");
+    var intro = "You are on the " + capitalize(usage.plan) + " plan. ";
+    intro += usage.is_demo
+      ? "Plans cannot be changed in the demo."
+      : "Choose the plan that fits your business.";
+    card.appendChild(el("p", "plan-text", intro));
+
+    var options = el("div", "plan-options");
+    options.setAttribute("role", "group");
+    options.setAttribute("aria-label", "Choose a plan");
+
     state.plans.forEach(function (plan) {
       var isCurrent = plan.name === usage.plan;
-      var button = el(
-        "button",
-        "btn btn-small " + (isCurrent ? "btn-primary" : "btn-ghost"),
-        capitalize(plan.name) + " (" + plan.ai_call_limit + " AI calls)"
-      );
-      button.type = "button";
-      button.setAttribute("aria-pressed", isCurrent ? "true" : "false");
-      button.disabled = usage.is_demo;
+      var option = el("button", "plan-option" + (isCurrent ? " current" : ""));
+      option.type = "button";
+      option.setAttribute("aria-pressed", isCurrent ? "true" : "false");
+      option.disabled = usage.is_demo;
+      option.appendChild(el("span", "plan-name", capitalize(plan.name)));
+      option.appendChild(el("span", "plan-limit", plan.ai_call_limit + " AI calls"));
 
-      button.addEventListener("click", async function () {
+      option.addEventListener("click", async function () {
         if (isCurrent) {
           return;
         }
-        buttons.querySelectorAll("button").forEach(function (item) {
+        options.querySelectorAll("button").forEach(function (item) {
           item.disabled = true;
         });
         try {
@@ -312,15 +316,9 @@
         }
         render();
       });
-      buttons.appendChild(button);
+      options.appendChild(option);
     });
-    card.appendChild(buttons);
-
-    if (usage.is_demo) {
-      card.appendChild(
-        el("p", "stat-note", "Plans cannot be changed in the demo.")
-      );
-    }
+    card.appendChild(options);
 
     return card;
   }
