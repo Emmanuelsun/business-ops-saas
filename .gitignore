@@ -1,4 +1,23 @@
+# Python
 venv/
-.env
+.venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# Secrets and local settings: never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editor and system files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# End of file
