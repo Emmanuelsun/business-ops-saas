@@ -1,0 +1,53 @@
+# Runs the daily follow-up check on the live Lumen app and sends a Telegram message.
+name: Daily follow-up check
+
+on:
+  schedule:
+    # 08:00 UTC is 09:00 in Lagos. GitHub may start scheduled runs a few minutes late.
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  follow-ups:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LUMEN_URL: https://lumen-ty04.onrender.com
+      LUMEN_EMAIL: ${{ secrets.LUMEN_OWNER_EMAIL }}
+      LUMEN_PASSWORD: ${{ secrets.LUMEN_OWNER_PASSWORD }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Log in and run the check
+        run: |
+          set -euo pipefail
+
+          # The free instance may be asleep, so allow a long wait and retry a few times.
+          CURL="curl --silent --show-error --fail --max-time 90 --retry 3 --retry-delay 20 --retry-all-errors"
+
+          TOKEN=$($CURL -X POST "$LUMEN_URL/auth/login" \
+            --data-urlencode "username=$LUMEN_EMAIL" \
+            --data-urlencode "password=$LUMEN_PASSWORD" | jq -r '.access_token')
+
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "Login did not return a token."
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+
+          RESULT=$($CURL -X POST "$LUMEN_URL/follow-ups/run?days=2&limit=3" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+
+          CREATED=$(echo "$RESULT" | jq -r '.created')
+          echo "Reminders created: $CREATED"
+
+          if [ "$CREATED" -gt 0 ]; then
+            $CURL -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+              --data-urlencode "text=You have $CREATED new follow-up reminder(s) waiting for review in Lumen." \
+              > /dev/null
+          fi
+
+# End of file
